@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tebbor — скільки ти насправді коштуєш</title>
+<meta name="description" content="10 питань для аналітиків даних і BI. Розбір: в які ролі ти вже проходиш, скільки там платять і чого бракує.">
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+<style>
+  :root{
+    --bg:#f4f6fb; --card:#ffffff; --ink:#1a2238; --muted:#6b7394;
+    --line:#e4e8f2; --brand:#2f6f5e; --brand-ink:#ffffff;
+    --accent:#3b6ea5; --shadow:0 10px 40px rgba(26,34,56,.08);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0f1420; --card:#171d2b; --ink:#e8ecf6; --muted:#9aa3bf;
+      --line:#2a3245; --brand:#3f8b76; --accent:#5b8fc7; --shadow:0 10px 40px rgba(0,0,0,.4);
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.55; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:640px; margin:0 auto; padding:24px 16px 64px}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:18px; padding:28px 22px; box-shadow:var(--shadow)}
+  h1{font-size:1.75rem; line-height:1.2; margin:.2em 0 .5em; letter-spacing:-.02em}
+  p{color:var(--muted); margin:.4em 0}
+  .lead{font-size:1.05rem}
+  .points{margin:18px 0 22px; padding:0; list-style:none; display:grid; gap:10px}
+  .points li{display:flex; gap:10px; color:var(--ink)}
+  .points li::before{content:"→"; color:var(--accent); font-weight:700}
+  .btn{
+    appearance:none; border:0; cursor:pointer; font:inherit; font-weight:600;
+    background:var(--brand); color:var(--brand-ink);
+    padding:14px 22px; border-radius:12px; width:100%; font-size:1.05rem;
+  }
+  .btn:active{transform:translateY(1px)}
+  .btn.secondary{background:transparent; color:var(--brand); border:1px solid var(--line)}
+  .btn[disabled]{opacity:.4; cursor:not-allowed}
+  .meta{display:flex; justify-content:space-between; font-size:.85rem; color:var(--muted); margin-bottom:8px}
+  .bar{height:6px; background:var(--line); border-radius:99px; overflow:hidden; margin-bottom:22px}
+  .bar > i{display:block; height:100%; width:0; background:var(--accent); border-radius:99px; transition:width .25s ease}
+  .q{font-size:1.25rem; font-weight:600; margin:0 0 6px; letter-spacing:-.01em; color:var(--ink)}
+  .hint{font-size:.85rem; margin:0 0 16px}
+  .opts{display:grid; gap:10px}
+  .opt{
+    display:flex; align-items:center; gap:12px; text-align:left;
+    background:var(--card); border:1.5px solid var(--line); color:var(--ink);
+    padding:13px 15px; border-radius:12px; cursor:pointer; font:inherit; font-size:1rem;
+  }
+  .opt:hover{border-color:var(--accent)}
+  .opt.sel{border-color:var(--accent); background:color-mix(in srgb, var(--accent) 10%, var(--card))}
+  .opt .k{flex:0 0 auto; width:22px; height:22px; border-radius:6px; border:1.5px solid var(--line); display:grid; place-items:center; font-size:.8rem; color:#fff}
+  .opt.radio .k{border-radius:50%}
+  .opt.sel .k{background:var(--accent); border-color:var(--accent)}
+  .nav{display:flex; gap:12px; margin-top:22px}
+  .nav .btn{flex:1}
+  .hide{display:none !important}
+  .loading{display:flex; align-items:center; gap:12px; color:var(--muted)}
+  .spin{width:18px; height:18px; border:2px solid var(--line); border-top-color:var(--accent); border-radius:50%; animation:s 1s linear infinite}
+  @keyframes s{to{transform:rotate(360deg)}}
+  /* розбір */
+  .report{color:var(--ink); overflow-wrap:anywhere}
+  .report h2{font-size:1.25rem; margin:1.4em 0 .5em; letter-spacing:-.01em}
+  .report h2:first-child{margin-top:0}
+  .report h3{font-size:1.05rem; margin:1.3em 0 .4em; padding-top:1em; border-top:1px solid var(--line)}
+  .report p{color:var(--ink)}
+  .report ul,.report ol{padding-left:1.2em; margin:.4em 0}
+  .report li{margin:.3em 0}
+  .report a{color:var(--accent); font-weight:600}
+  .report a.vac{display:inline-block; margin-top:4px; text-decoration:none; border:1px solid var(--accent); border-radius:99px; padding:4px 12px; font-size:.9rem}
+  .err{color:#b3413b}
+  .foot{font-size:.78rem; color:var(--muted); text-align:center; margin-top:22px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <section id="landing" class="card">
+    <h1>Робиш SQL, Power BI і Python, а називаєшся «аналітиком»?</h1>
+    <p class="lead">10 питань — і розбір того, скільки твій досвід реально коштує на ринку.</p>
+    <ul class="points">
+      <li>10 ролей, у які ти вже проходиш — від найближчої</li>
+      <li>Вилки з реальних даних DOU, без вигадок</li>
+      <li>Чого бракує для кожної — чесно, без лестощів</li>
+      <li>Один крок: де швидкі гроші, а де стеля</li>
+    </ul>
+    <button class="btn" id="startBtn">Почати — ~2 хвилини</button>
+    <p class="foot">Для аналітиків даних і BI в Україні. Без реєстрації.</p>
+  </section>
+
+  <section id="quiz" class="card hide">
+    <div class="meta"><span id="qcount"></span><span id="qpct"></span></div>
+    <div class="bar"><i id="barfill"></i></div>
+    <p class="q" id="qtext"></p>
+    <p class="hint" id="qhint"></p>
+    <div class="opts" id="opts"></div>
+    <div class="nav">
+      <button class="btn secondary" id="backBtn">Назад</button>
+      <button class="btn" id="nextBtn" disabled>Далі</button>
+    </div>
+  </section>
+
+  <section id="result" class="card hide">
+    <div class="loading" id="loading"><div class="spin"></div><span>Розбираю твій досвід — це може зайняти 1–2 хвилини…</span></div>
+    <div class="report" id="report"></div>
+    <div id="after" class="hide">
+      <div style="height:22px"></div>
+      <button class="btn secondary" id="restartBtn">Пройти ще раз</button>
+      <p class="foot">Зарплати — медіани DOU, літо 2026. Розбір згенеровано ШІ на основі твоїх відповідей; це орієнтир, а не гарантія.</p>
+    </div>
+  </section>
+
+</div>
+
+<script type="module">
+import { QUESTIONS } from "./questions.js";
+
+const $ = id => document.getElementById(id);
+let cur = 0;
+let answers = QUESTIONS.map(q => q.multi ? [] : null);
+
+const has = i => QUESTIONS[i].multi ? answers[i].length > 0 : answers[i] !== null;
+
+function show(id){
+  for (const s of ["landing","quiz","result"]) $(s).classList.toggle("hide", s !== id);
+  window.scrollTo(0, 0);
+}
+
+function render(){
+  const q = QUESTIONS[cur];
+  const pct = Math.round(cur / QUESTIONS.length * 100);
+  $("qcount").textContent = `Питання ${cur+1} / ${QUESTIONS.length}`;
+  $("qpct").textContent = pct + "%";
+  $("barfill").style.width = pct + "%";
+  $("qtext").textContent = q.q;
+  $("qhint").textContent = q.multi ? "Можна кілька" : "";
+  $("qhint").classList.toggle("hide", !q.multi);
+
+  const box = $("opts");
+  box.innerHTML = "";
+  q.opts.forEach((o, i) => {
+    const sel = q.multi ? answers[cur].includes(i) : answers[cur] === i;
+    const b = document.createElement("button");
+    b.className = "opt" + (q.multi ? "" : " radio") + (sel ? " sel" : "");
+    const k = document.createElement("span"); k.className = "k"; k.textContent = sel && q.multi ? "✓" : "";
+    const t = document.createElement("span"); t.textContent = o;
+    b.append(k, t);
+    b.onclick = () => {
+      if (q.multi){
+        const a = answers[cur];
+        answers[cur] = a.includes(i) ? a.filter(x => x !== i) : [...a, i];
+        render();
+      } else {
+        answers[cur] = i;
+        render();
+        setTimeout(next, 220); // одиночний вибір — одразу далі
+      }
+    };
+    box.appendChild(b);
+  });
+
+  $("backBtn").classList.toggle("hide", cur === 0);
+  $("nextBtn").disabled = !has(cur);
+  $("nextBtn").textContent = cur === QUESTIONS.length - 1 ? "Отримати розбір" : "Далі";
+}
+
+function next(){
+  if (!has(cur)) return;
+  if (cur < QUESTIONS.length - 1){ cur++; render(); }
+  else analyze();
+}
+
+// vac:Data Engineer → пошук вакансій на DOU
+function linkify(md){
+  return md.replace(/\]\(vac:([^)]+)\)/g, (_, role) =>
+    `](https://jobs.dou.ua/vacancies/?search=${encodeURIComponent(role.trim())})`);
+}
+function draw(md){
+  const html = DOMPurify.sanitize(marked.parse(linkify(md)));
+  const r = $("report");
+  r.innerHTML = html;
+  r.querySelectorAll('a[href^="https://jobs.dou.ua"]').forEach(a => {
+    a.classList.add("vac"); a.target = "_blank"; a.rel = "noopener";
+  });
+}
+
+async function analyze(){
+  show("result");
+  $("report").innerHTML = "";
+  $("loading").classList.remove("hide");
+  $("after").classList.add("hide");
+  let text = "";
+  try {
+    const res = await fetch("/api/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ answers }),
+    });
+    if (!res.ok || !res.body){
+      let msg = "Щось пішло не так.";
+      try { msg = (await res.json()).error || msg; } catch {}
+      throw new Error(msg);
+    }
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let pending = false;
+    for (;;){
+      const { value, done } = await reader.read();
+      if (done) break;
+      text += dec.decode(value, { stream: true }).replaceAll("\u200b", ""); // пульс сервера
+      if (text.trim()) $("loading").classList.add("hide");
+      if (!pending){ pending = true; requestAnimationFrame(() => { draw(text); pending = false; }); }
+    }
+    draw(text);
+    if (!text.trim()) throw new Error("Порожня відповідь. Спробуй ще раз.");
+  } catch (e) {
+    $("loading").classList.add("hide");
+    const p = document.createElement("p");
+    p.className = "err";
+    const m = String(e && e.message || "");
+    p.textContent = /network|fetch|load failed|terminated/i.test(m)
+      ? "З'єднання обірвалось. Натисни «Пройти ще раз» і спробуй знову."
+      : (m || "Щось пішло не так.");
+    $("report").appendChild(p);
+  }
+  $("after").classList.remove("hide");
+}
+
+$("startBtn").onclick = () => { show("quiz"); render(); };
+$("nextBtn").onclick = next;
+$("backBtn").onclick = () => { if (cur > 0){ cur--; render(); } };
+$("restartBtn").onclick = () => {
+  cur = 0; answers = QUESTIONS.map(q => q.multi ? [] : null);
+  show("landing");
+};
+</script>
+</body>
+</html>

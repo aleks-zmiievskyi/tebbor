@@ -107,11 +107,13 @@
   </section>
 
   <section id="result" class="card hide">
-    <div class="loading" id="loading"><div class="spin"></div><span>Розбираю твій досвід — це може зайняти 1–2 хвилини…</span></div>
+    <div class="loading" id="loading"><div class="spin"></div><span>Розбираю твій досвід — це може зайняти 1–2 хвилини. Не блокуй телефон і не перемикай вкладку.</span></div>
     <div class="report" id="report"></div>
     <div id="after" class="hide">
       <div style="height:22px"></div>
-      <button class="btn secondary" id="restartBtn">Пройти ще раз</button>
+      <button class="btn hide" id="retryBtn">Спробувати ще раз (ті самі відповіді)</button>
+      <div style="height:10px"></div>
+      <button class="btn secondary" id="restartBtn">Пройти анкету заново</button>
       <p class="foot">Зарплати — медіани DOU, літо 2026. Розбір згенеровано ШІ на основі твоїх відповідей; це орієнтир, а не гарантія.</p>
     </div>
   </section>
@@ -181,8 +183,16 @@ function linkify(md){
   return md.replace(/\]\(vac:([^)]+)\)/g, (_, role) =>
     `](https://jobs.dou.ua/vacancies/?search=${encodeURIComponent(role.trim())})`);
 }
+// «Не знаю» в «Куди тягне» → рядка «Твій напрям» бути не повинно (модель інколи ігнорує правило)
+function tidy(md){
+  const qi = QUESTIONS.findIndex(q => q.label === "Куди тягне");
+  const dunno = QUESTIONS[qi].opts.indexOf("Не знаю");
+  if (qi >= 0 && Array.isArray(answers[qi]) && answers[qi].includes(dunno))
+    md = md.replace(/^\s*[-*]\s*\*\*Твій напрям:?\*\*.*$/gm, "");
+  return md;
+}
 function draw(md){
-  const html = DOMPurify.sanitize(marked.parse(linkify(md)));
+  const html = DOMPurify.sanitize(marked.parse(linkify(tidy(md))));
   const r = $("report");
   r.innerHTML = html;
   r.querySelectorAll('a[href^="https://jobs.dou.ua"]').forEach(a => {
@@ -190,17 +200,39 @@ function draw(md){
   });
 }
 
+const FIRST_TEXT_MS = 240000; // 4 хв без жодного слова — модель зависла
+const STALL_MS = 30000;        // 30 с без жодного байта (навіть пульсу) — з'єднання мертве
+
+function fail(msg){
+  $("loading").classList.add("hide");
+  const p = document.createElement("p");
+  p.className = "err";
+  p.textContent = msg;
+  $("report").appendChild(p);
+  $("retryBtn").classList.remove("hide");
+}
+
 async function analyze(){
   show("result");
   $("report").innerHTML = "";
   $("loading").classList.remove("hide");
   $("after").classList.add("hide");
-  let text = "";
+  $("retryBtn").classList.add("hide");
+  const ctrl = new AbortController();
+  let why = "";
+  const started = Date.now();
+  let lastByte = Date.now();
+  let text = "", complete = false, raf = 0;
+  const watchdog = setInterval(() => {
+    if (!text.trim() && Date.now() - started > FIRST_TEXT_MS){ why = "slow"; ctrl.abort(); }
+    else if (Date.now() - lastByte > STALL_MS){ why = "stall"; ctrl.abort(); }
+  }, 2000);
   try {
     const res = await fetch("/api/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ answers }),
+      signal: ctrl.signal,
     });
     if (!res.ok || !res.body){
       let msg = "Щось пішло не так.";
@@ -209,31 +241,39 @@ async function analyze(){
     }
     const reader = res.body.getReader();
     const dec = new TextDecoder();
-    let pending = false;
     for (;;){
       const { value, done } = await reader.read();
       if (done) break;
-      text += dec.decode(value, { stream: true }).replaceAll("\u200b", ""); // пульс сервера
+      lastByte = Date.now();
+      let chunk = dec.decode(value, { stream: true }).replaceAll("\u200b", ""); // пульс сервера
+      if (chunk.includes("\u2060")){ complete = true; chunk = chunk.replaceAll("\u2060", ""); }
+      text += chunk;
       if (text.trim()) $("loading").classList.add("hide");
-      if (!pending){ pending = true; requestAnimationFrame(() => { draw(text); pending = false; }); }
+      if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw(text); });
     }
+    cancelAnimationFrame(raf); raf = 0;
     draw(text);
     if (!text.trim()) throw new Error("Порожня відповідь. Спробуй ще раз.");
+    if (!complete) fail("Розбір обірвався на півдорозі. Спробуй ще раз — відповіді збережені.");
   } catch (e) {
-    $("loading").classList.add("hide");
-    const p = document.createElement("p");
-    p.className = "err";
+    cancelAnimationFrame(raf);
+    if (text.trim()) draw(text);
     const m = String(e && e.message || "");
-    p.textContent = /network|fetch|load failed|terminated/i.test(m)
-      ? "З'єднання обірвалось. Натисни «Пройти ще раз» і спробуй знову."
-      : (m || "Щось пішло не так.");
-    $("report").appendChild(p);
+    fail(
+      why === "slow" ? "Модель зараз перевантажена й не відповідає. Спробуй ще раз за хвилину." :
+      why === "stall" || /network|fetch|load failed|terminated|abort/i.test(m)
+        ? "З'єднання обірвалось (часто — коли телефон заблокувався). Спробуй ще раз — відповіді збережені."
+        : (m || "Щось пішло не так.")
+    );
+  } finally {
+    clearInterval(watchdog);
   }
   $("after").classList.remove("hide");
 }
 
 $("startBtn").onclick = () => { show("quiz"); render(); };
 $("nextBtn").onclick = next;
+$("retryBtn").onclick = analyze;
 $("backBtn").onclick = () => { if (cur > 0){ cur--; render(); } };
 $("restartBtn").onclick = () => {
   cur = 0; answers = QUESTIONS.map(q => q.multi ? [] : null);

@@ -12,7 +12,7 @@ export function buildUserMessage(answers) {
       new Set(idx).size !== idx.length ||
       idx.some((n) => !Number.isInteger(n) || n < 0 || n >= q.opts.length);
     if (bad) return null;
-    lines.push(`${i + 1}. ${q.label}: ${idx.map((n) => q.opts[n]).join(", ")}`);
+    lines.push(`${q.label}: ${idx.map((n) => q.opts[n]).join(", ")}`);
   }
   return lines.join("\n");
 }
@@ -20,7 +20,9 @@ export function buildUserMessage(answers) {
 // Пульс: поки модель «думає» (reasoning) і не віддає тексту, з'єднання мовчить,
 // і проміжні проксі можуть його обірвати. Тому раз на 3 с шлемо невидимий символ,
 // який сторінка викидає.
-export const HEARTBEAT = "​";
+export const HEARTBEAT = "\u200b";
+// Маркер «відповідь дописана до кінця». Нема маркера — сторінка знає, що розбір обірвався.
+export const DONE_MARK = "\u2060";
 const BEAT_MS = 3000;
 
 // SSE від OpenRouter → чистий текст (+ пульс)
@@ -30,6 +32,7 @@ export function sseToText() {
   let buf = "";
   let last = Date.now();
   let timer = null;
+  let finish = null;
   const send = (ctrl, s) => { ctrl.enqueue(enc.encode(s)); last = Date.now(); };
   const handle = (line, ctrl) => {
     line = line.trim();
@@ -39,8 +42,10 @@ export function sseToText() {
     try {
       const j = JSON.parse(data);
       if (j.error) { send(ctrl, "\n\n_[Помилка генерації. Спробуй ще раз.]_"); return; }
-      const t = j.choices?.[0]?.delta?.content;
+      const c = j.choices?.[0];
+      const t = c?.delta?.content;
       if (t) send(ctrl, t);
+      if (c?.finish_reason) finish = c.finish_reason;
     } catch { /* неповний/службовий рядок — пропускаємо */ }
   };
   return new TransformStream({
@@ -60,7 +65,11 @@ export function sseToText() {
         buf = buf.slice(nl + 1);
       }
     },
-    flush(ctrl) { clearInterval(timer); if (buf) handle(buf, ctrl); },
+    flush(ctrl) {
+      clearInterval(timer);
+      if (buf) handle(buf, ctrl);
+      if (finish && finish !== "length" && finish !== "error") send(ctrl, DONE_MARK);
+    },
     cancel() { clearInterval(timer); },
   });
 }

@@ -75,6 +75,16 @@
   .report a{color:var(--accent); font-weight:600}
   .report a.vac{display:inline-block; margin-top:4px; text-decoration:none; border:1px solid var(--accent); border-radius:99px; padding:4px 12px; font-size:.9rem}
   .err{color:#b3413b}
+  /* приклад розбору на лендингу */
+  .sample{position:relative; margin:4px 0 22px; border:1px solid var(--line); border-radius:14px; padding:16px 16px 0; overflow:hidden; max-height:290px}
+  .sample .tag{display:inline-block; font-size:.72rem; color:var(--muted); border:1px solid var(--line); border-radius:99px; padding:2px 10px; margin-bottom:8px}
+  .sample h4{margin:.2em 0 .3em; font-size:1rem}
+  .sample p,.sample li{color:var(--ink); font-size:.92rem; margin:.25em 0}
+  .sample ul{padding-left:1.1em; margin:.3em 0}
+  .sample::after{content:""; position:absolute; left:0; right:0; bottom:0; height:120px; background:linear-gradient(to bottom, transparent, var(--card))}
+  .field{width:100%; font:inherit; font-size:1rem; padding:13px 15px; border-radius:12px; border:1.5px solid var(--line); background:var(--card); color:var(--ink); margin:6px 0 14px}
+  .field:focus{outline:none; border-color:var(--accent)}
+  .ok{color:var(--brand); font-weight:600}
   .foot{font-size:.78rem; color:var(--muted); text-align:center; margin-top:22px}
 </style>
 </head>
@@ -83,15 +93,47 @@
 
   <section id="landing" class="card">
     <h1>Робиш SQL, Power BI і Python, а називаєшся «аналітиком»?</h1>
-    <p class="lead">10 питань — і розбір того, скільки твій досвід реально коштує на ринку.</p>
+    <p class="lead">Короткий тест тапами — і розбір того, скільки твій досвід реально коштує на ринку.</p>
     <ul class="points">
       <li>10 ролей, у які ти вже проходиш — від найближчої</li>
       <li>Вилки з реальних даних DOU, без вигадок</li>
       <li>Чого бракує для кожної — чесно, без лестощів</li>
       <li>Один крок: де швидкі гроші, а де стеля</li>
     </ul>
+    <div class="sample" aria-label="Приклад розбору">
+      <span class="tag">Приклад розбору · вигаданий профіль</span>
+      <h4>Де ти зараз</h4>
+      <p>3 роки в ритейлі, посада «аналітик звітності». Але ти моделюєш дані, будуєш ETL і автоматизуєш звіти — це робота BI Developer. У не-IT за неї платять ~$1500, в IT медіана — $2750.</p>
+      <h4>1. BI Developer · продуктова IT — готовий зараз</h4>
+      <ul>
+        <li>✅ SQL, Power BI, моделювання, ETL</li>
+        <li>⚠️ git, робота з продуктовими метриками</li>
+        <li><b>Розрив:</b> ~1.6x від поточної</li>
+      </ul>
+      <p>…ще 9 ролей, вилки й один крок</p>
+    </div>
     <button class="btn" id="startBtn">Почати — ~2 хвилини</button>
-    <p class="foot">Для аналітиків даних і BI в Україні. Без реєстрації.</p>
+    <p class="foot">Тільки тапи, без реєстрації.</p>
+  </section>
+
+  <section id="sphere" class="card hide">
+    <p class="q">Твоя сфера?</p>
+    <p class="hint">Обери, де працюєш зараз</p>
+    <div class="opts" id="sphereOpts"></div>
+    <div class="nav"><button class="btn secondary" id="sphereBack">Назад</button></div>
+  </section>
+
+  <section id="lead" class="card hide">
+    <p class="q" id="leadTitle">Для твоєї сфери ще готуємо розбір</p>
+    <p>Зараз тест працює для даних і аналітики. Залиш email або Telegram — напишемо один раз, коли запустимо твою сферу. Без спаму.</p>
+    <form id="leadForm">
+      <input class="field" id="leadContact" name="contact" placeholder="email або @telegram" autocomplete="email" required maxlength="120">
+      <button class="btn" id="leadBtn" type="submit">Повідомити мене</button>
+    </form>
+    <p class="ok hide" id="leadOk">Дякуємо! Напишемо, щойно запустимо.</p>
+    <p class="err hide" id="leadErr"></p>
+    <div style="height:10px"></div>
+    <button class="btn secondary" id="leadBack">Назад</button>
   </section>
 
   <section id="quiz" class="card hide">
@@ -120,6 +162,10 @@
 
 </div>
 
+<form name="lead" data-netlify="true" netlify-honeypot="bot-field" hidden>
+  <input name="sphere"><input name="contact"><input name="bot-field">
+</form>
+
 <script type="module">
 import { QUESTIONS } from "./questions.js";
 
@@ -130,7 +176,7 @@ let answers = QUESTIONS.map(q => q.multi ? [] : null);
 const has = i => QUESTIONS[i].multi ? answers[i].length > 0 : answers[i] !== null;
 
 function show(id){
-  for (const s of ["landing","quiz","result"]) $(s).classList.toggle("hide", s !== id);
+  for (const s of ["landing","sphere","lead","quiz","result"]) $(s).classList.toggle("hide", s !== id);
   window.scrollTo(0, 0);
 }
 
@@ -167,7 +213,7 @@ function render(){
     box.appendChild(b);
   });
 
-  $("backBtn").classList.toggle("hide", cur === 0);
+  $("backBtn").classList.remove("hide");
   $("nextBtn").disabled = !has(cur);
   $("nextBtn").textContent = cur === QUESTIONS.length - 1 ? "Отримати розбір" : "Далі";
 }
@@ -271,10 +317,56 @@ async function analyze(){
   $("after").classList.remove("hide");
 }
 
-$("startBtn").onclick = () => { show("quiz"); render(); };
+// Сфера: дані → анкета; решта → збираємо контакт (вимірюємо попит на інші гілки)
+const SPHERES = ["Дані / аналітика / BI", "Маркетинг", "Дизайн", "Розробка", "Продажі", "Інше"];
+let sphere = null;
+function renderSphere(){
+  const box = $("sphereOpts");
+  box.innerHTML = "";
+  SPHERES.forEach((o, i) => {
+    const b = document.createElement("button");
+    b.className = "opt radio" + (sphere === i ? " sel" : "");
+    const k = document.createElement("span"); k.className = "k";
+    const t = document.createElement("span"); t.textContent = o;
+    b.append(k, t);
+    b.onclick = () => {
+      sphere = i; renderSphere();
+      setTimeout(() => {
+        if (i === 0){ show("quiz"); render(); }
+        else {
+          $("leadForm").classList.remove("hide"); $("leadOk").classList.add("hide"); $("leadErr").classList.add("hide");
+          show("lead");
+        }
+      }, 220);
+    };
+    box.appendChild(b);
+  });
+}
+$("leadForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const contact = $("leadContact").value.trim();
+  if (!contact) return;
+  $("leadBtn").disabled = true;
+  try {
+    const body = new URLSearchParams({ "form-name": "lead", sphere: SPHERES[sphere], contact, "bot-field": "" });
+    const r = await fetch("/", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body });
+    if (!r.ok) throw new Error();
+    $("leadForm").classList.add("hide");
+    $("leadOk").classList.remove("hide");
+    $("leadErr").classList.add("hide");
+  } catch {
+    $("leadErr").textContent = "Не вдалося надіслати. Спробуй ще раз.";
+    $("leadErr").classList.remove("hide");
+  }
+  $("leadBtn").disabled = false;
+};
+$("leadBack").onclick = () => { show("sphere"); renderSphere(); };
+$("sphereBack").onclick = () => show("landing");
+
+$("startBtn").onclick = () => { show("sphere"); renderSphere(); };
 $("nextBtn").onclick = next;
 $("retryBtn").onclick = analyze;
-$("backBtn").onclick = () => { if (cur > 0){ cur--; render(); } };
+$("backBtn").onclick = () => { if (cur > 0){ cur--; render(); } else { show("sphere"); renderSphere(); } };
 $("restartBtn").onclick = () => {
   cur = 0; answers = QUESTIONS.map(q => q.multi ? [] : null);
   show("landing");

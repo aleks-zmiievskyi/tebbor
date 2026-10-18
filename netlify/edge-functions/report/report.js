@@ -7,6 +7,7 @@
 import { SYSTEM_PROMPT } from "../../shared/prompt.js";
 import {
   buildUserMessage, reports, ID_RE, jsonError, sseParser, HEARTBEAT, DONE_MARK,
+  creemConfig, creemIsPaid,
 } from "../../shared/lib.js";
 
 const DEFAULT_MODEL = "anthropic/claude-sonnet-4.5";
@@ -25,8 +26,31 @@ export default async (req, context) => {
   if (!ID_RE.test(id)) return jsonError("Розбір не знайдено", 404);
 
   const store = reports();
-  const got = await store.getWithMetadata(id, { type: "json" });
+  let got = await store.getWithMetadata(id, { type: "json" });
   if (!got?.data) return jsonError("Розбір не знайдено", 404);
+
+  // К8: не оплачено → перевіряємо в creem; оплачено → переводимо в "new" і генеруємо.
+  if (got.data.status === "unpaid") {
+    const cfg = creemConfig();
+    let paidBy = null, pending = false;
+    if (cfg.enabled) {
+      for (const co of got.data.checkouts || []) {
+        try {
+          const r = await creemIsPaid(cfg, co, id);
+          if (r.paid) { paidBy = co; break; }
+          if (r.status === "pending" || r.status === "processing") pending = true;
+        } catch (e) { console.log(String(e)); pending = true; }
+      }
+    }
+    if (cfg.enabled && !paidBy) {
+      return jsonError("payment_required", 402, { pending, hasCheckout: (got.data.checkouts || []).length > 0 });
+    }
+    // оплачено (або пейвол вимкнули) — знімаємо замок, далі звичайна логіка
+    await store.setJSON(id, { ...got.data, status: "new", paidBy, paidAt: paidBy ? Date.now() : null },
+      { onlyIfMatch: got.etag });
+    got = await store.getWithMetadata(id, { type: "json" });
+    if (!got?.data) return jsonError("Розбір не знайдено", 404);
+  }
   const rec = got.data;
 
   const headers = {

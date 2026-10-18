@@ -114,6 +114,7 @@
     </div>
     <button class="btn" id="startBtn">Почати — ~2 хвилини</button>
     <p class="foot">Тільки тапи, без реєстрації.</p>
+    <p class="foot hide" id="lastWrap"><a id="lastLink" href="#">Відкрити мій останній розбір</a></p>
   </section>
 
   <section id="sphere" class="card hide">
@@ -149,11 +150,15 @@
   </section>
 
   <section id="result" class="card hide">
-    <div class="loading" id="loading"><div class="spin"></div><span>Розбираю твій досвід — це може зайняти 1–2 хвилини. Не блокуй телефон і не перемикай вкладку.</span></div>
+    <div class="loading" id="loading"><div class="spin"></div><span id="loadingText">Розбираю твій досвід — це займе 1–2 хвилини. Можна згорнути: розбір збережеться за цим посиланням.</span></div>
     <div class="report" id="report"></div>
     <div id="after" class="hide">
       <div style="height:22px"></div>
       <button class="btn hide" id="retryBtn">Спробувати ще раз (ті самі відповіді)</button>
+      <div id="savedBox" class="hide">
+        <p>Розбір збережено — відкривається за посиланням з будь-якого пристрою.</p>
+        <button class="btn secondary" id="copyBtn">Скопіювати посилання</button>
+      </div>
       <div style="height:10px"></div>
       <button class="btn secondary" id="restartBtn">Пройти анкету заново</button>
       <p class="foot">Зарплати — медіани DOU, літо 2026. Розбір згенеровано ШІ на основі твоїх відповідей; це орієнтир, а не гарантія.</p>
@@ -167,7 +172,7 @@
 </form>
 
 <script type="module">
-import { QUESTIONS } from "./questions.js";
+import { QUESTIONS } from "/questions.js";
 
 const $ = id => document.getElementById(id);
 let cur = 0;
@@ -249,7 +254,9 @@ function draw(md){
 const FIRST_TEXT_MS = 240000; // 4 хв без жодного слова — модель зависла
 const STALL_MS = 30000;        // 30 с без жодного байта (навіть пульсу) — з'єднання мертве
 
-function fail(msg){
+let retryAction = null;
+function fail(msg, action){
+  retryAction = action || (() => { reconnects = 0; loadReport(reportId); });
   $("loading").classList.add("hide");
   const p = document.createElement("p");
   p.className = "err";
@@ -258,33 +265,69 @@ function fail(msg){
   $("retryBtn").classList.remove("hide");
 }
 
+// Відповіді → сервер зберігає їх і дає id → сторінка переходить на /r/<id> і тягне розбір.
 async function analyze(){
   show("result");
-  $("report").innerHTML = "";
-  $("loading").classList.remove("hide");
-  $("after").classList.add("hide");
-  $("retryBtn").classList.add("hide");
-  const ctrl = new AbortController();
-  let why = "";
-  const started = Date.now();
-  let lastByte = Date.now();
-  let text = "", complete = false, raf = 0;
-  const watchdog = setInterval(() => {
-    if (!text.trim() && Date.now() - started > FIRST_TEXT_MS){ why = "slow"; ctrl.abort(); }
-    else if (Date.now() - lastByte > STALL_MS){ why = "stall"; ctrl.abort(); }
-  }, 2000);
+  resetResult();
+  $("nextBtn").disabled = true;
   try {
     const res = await fetch("/api/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ answers }),
-      signal: ctrl.signal,
     });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || !j.id) throw new Error(j.error || "Щось пішло не так.");
+    remember(j.id);
+    history.pushState(null, "", "/r/" + j.id);
+    loadReport(j.id);
+  } catch (e) {
+    fail(/network|fetch|load failed/i.test(String(e?.message)) ? "Нема з'єднання. Спробуй ще раз." : e.message, analyze);
+    $("after").classList.remove("hide");
+  } finally {
+    $("nextBtn").disabled = false;
+  }
+}
+
+function resetResult(){
+  $("report").innerHTML = "";
+  $("loading").classList.remove("hide");
+  $("after").classList.add("hide");
+  $("retryBtn").classList.add("hide");
+  $("savedBox").classList.add("hide");
+}
+
+function remember(id){ try { localStorage.setItem("tebbor:last", id); } catch {} }
+function lastId(){ try { return localStorage.getItem("tebbor:last"); } catch { return null; } }
+
+let reportId = null, reconnects = 0;
+const MAX_RECONNECTS = 3;
+
+async function loadReport(id){
+  reportId = id;
+  show("result");
+  resetResult();
+  const ctrl = new AbortController();
+  let why = "";
+  const started = Date.now();
+  let lastByte = Date.now();
+  let text = "", complete = false, raf = 0, notFound = false;
+  const watchdog = setInterval(() => {
+    if (!text.trim() && Date.now() - started > FIRST_TEXT_MS){ why = "slow"; ctrl.abort(); }
+    else if (Date.now() - lastByte > STALL_MS){ why = "stall"; ctrl.abort(); }
+  }, 2000);
+  try {
+    const res = await fetch("/api/report?id=" + encodeURIComponent(id), { signal: ctrl.signal, cache: "no-store" });
     if (!res.ok || !res.body){
+      notFound = res.status === 404;
       let msg = "Щось пішло не так.";
       try { msg = (await res.json()).error || msg; } catch {}
       throw new Error(msg);
     }
+    try {
+      const a = JSON.parse(res.headers.get("X-Answers") || "null");
+      if (Array.isArray(a) && a.length === QUESTIONS.length) answers = a;
+    } catch {}
     const reader = res.body.getReader();
     const dec = new TextDecoder();
     for (;;){
@@ -299,22 +342,46 @@ async function analyze(){
     }
     cancelAnimationFrame(raf); raf = 0;
     draw(text);
-    if (!text.trim()) throw new Error("Порожня відповідь. Спробуй ще раз.");
-    if (!complete) fail("Розбір обірвався на півдорозі. Спробуй ще раз — відповіді збережені.");
+    if (complete){
+      reconnects = 0;
+      remember(id);
+      $("savedBox").classList.remove("hide");
+    } else if (!reconnectLater()) {
+      fail("Розбір обірвався на півдорозі. Спробуй ще раз — відповіді збережені.");
+    }
   } catch (e) {
     cancelAnimationFrame(raf);
     if (text.trim()) draw(text);
     const m = String(e && e.message || "");
-    fail(
-      why === "slow" ? "Модель зараз перевантажена й не відповідає. Спробуй ще раз за хвилину." :
-      why === "stall" || /network|fetch|load failed|terminated|abort/i.test(m)
-        ? "З'єднання обірвалось (часто — коли телефон заблокувався). Спробуй ще раз — відповіді збережені."
-        : (m || "Щось пішло не так.")
-    );
+    const network = why === "stall" || /network|fetch|load failed|terminated|abort/i.test(m);
+    if (notFound){
+      fail("Розбір за цим посиланням не знайдено.");
+      $("retryBtn").classList.add("hide");
+    } else if (!(network && reconnectLater())) {
+      fail(
+        why === "slow" ? "Модель зараз перевантажена й не відповідає. Спробуй ще раз за хвилину." :
+        network ? "З'єднання обірвалось. Спробуй ще раз — розбір дописується на сервері." :
+        (m || "Щось пішло не так.")
+      );
+    }
   } finally {
     clearInterval(watchdog);
   }
   $("after").classList.remove("hide");
+}
+
+// Обрив (часто — телефон заблокувався): сервер дописує розбір сам, тож тихо
+// перепідключаємось, щойно сторінка знову видима.
+function reconnectLater(){
+  if (reconnects >= MAX_RECONNECTS) return false;
+  reconnects++;
+  const id = reportId;
+  const go = () => setTimeout(() => { if (reportId === id) loadReport(id); }, 1500);
+  if (document.visibilityState === "visible") go();
+  else document.addEventListener("visibilitychange", function h(){
+    if (document.visibilityState === "visible"){ document.removeEventListener("visibilitychange", h); go(); }
+  });
+  return true;
 }
 
 // Сфера: дані → анкета; решта → збираємо контакт (вимірюємо попит на інші гілки)
@@ -365,12 +432,25 @@ $("sphereBack").onclick = () => show("landing");
 
 $("startBtn").onclick = () => { show("sphere"); renderSphere(); };
 $("nextBtn").onclick = next;
-$("retryBtn").onclick = analyze;
-$("backBtn").onclick = () => { if (cur > 0){ cur--; render(); } else { show("sphere"); renderSphere(); } };
-$("restartBtn").onclick = () => {
-  cur = 0; answers = QUESTIONS.map(q => q.multi ? [] : null);
-  show("landing");
+$("retryBtn").onclick = () => retryAction && retryAction();
+$("copyBtn").onclick = async () => {
+  const url = location.origin + "/r/" + reportId;
+  try { await navigator.clipboard.writeText(url); $("copyBtn").textContent = "Скопійовано ✓"; }
+  catch { prompt("Скопіюй посилання:", url); }
 };
+$("backBtn").onclick = () => { if (cur > 0){ cur--; render(); } else { show("sphere"); renderSphere(); } };
+$("restartBtn").onclick = () => { location.href = "/"; };
+
+// Старт: /r/<id> → одразу розбір; інакше лендинг (+ посилання на останній розбір)
+const m = location.pathname.match(/^\/r\/([0-9a-f-]{36})\/?$/);
+if (m) loadReport(m[1]);
+else {
+  const last = lastId();
+  if (last && /^[0-9a-f-]{36}$/.test(last)){
+    $("lastLink").href = "/r/" + last;
+    $("lastWrap").classList.remove("hide");
+  }
+}
 </script>
 </body>
 </html>

@@ -2,6 +2,10 @@
   publish = "public"
   edge_functions = "netlify/edge-functions"
 
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
 # Збережений розбір: /r/<id> віддає ту саму сторінку, вона сама підтягує розбір.
 [[redirects]]
   from = "/r/*"

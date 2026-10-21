@@ -86,6 +86,14 @@
   .field:focus{outline:none; border-color:var(--accent)}
   .ok{color:var(--brand); font-weight:600}
   .foot{font-size:.78rem; color:var(--muted); text-align:center; margin-top:22px}
+  /* пейвол: розмита структура без вигаданого тексту */
+  .skel{border:1px solid var(--line); border-radius:14px; padding:16px; margin:4px 0 20px; filter:blur(2.5px); user-select:none; pointer-events:none}
+  .skel h4{margin:.9em 0 .45em; font-size:.95rem; color:var(--ink)}
+  .skel h4:first-child{margin-top:0}
+  .skel i{display:block; height:9px; border-radius:99px; background:var(--line); margin:7px 0}
+  .price{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin:0 0 14px}
+  .price b{font-size:1.6rem; letter-spacing:-.02em; color:var(--ink)}
+  .price span{font-size:.85rem; color:var(--muted)}
 </style>
 </head>
 <body>
@@ -113,7 +121,8 @@
       <p>…ще 9 ролей, вилки й один крок</p>
     </div>
     <button class="btn" id="startBtn">Почати — ~2 хвилини</button>
-    <p class="foot">Тільки тапи, без реєстрації.</p>
+    <p class="foot">Тільки тапи, без реєстрації. Розбір — ≈ 225 грн ($4.99), разово, без підписки.</p>
+    <p class="foot hide" id="lastWrap"><a id="lastLink" href="#">Відкрити мій останній розбір</a></p>
   </section>
 
   <section id="sphere" class="card hide">
@@ -148,12 +157,37 @@
     </div>
   </section>
 
+  <section id="paywall" class="card hide">
+    <p class="q">Твій розбір готовий до генерації</p>
+    <p>Зберемо його з твоїх 10 відповідей і реальних зарплат DOU:</p>
+    <ul class="points">
+      <li>10 ролей, у які ти проходиш, — від найближчої</li>
+      <li>Вилки для кожної і розрив з тим, що маєш зараз</li>
+      <li>Чого бракує — чесно, без лестощів</li>
+      <li>Один крок: швидкі гроші чи стеля</li>
+    </ul>
+    <div class="skel" aria-hidden="true">
+      <h4>Де ти зараз</h4><i style="width:96%"></i><i style="width:88%"></i><i style="width:60%"></i>
+      <h4>1–3. Найближчі ролі — детально</h4><i style="width:92%"></i><i style="width:80%"></i><i style="width:85%"></i>
+      <h4>4–10. Ще 7 ролей</h4><i style="width:70%"></i><i style="width:74%"></i>
+      <h4>Твій крок</h4><i style="width:90%"></i><i style="width:55%"></i>
+    </div>
+    <div class="price"><b>≈ 225 грн</b><span>оплата $4.99 · разово, без підписки</span></div>
+    <button class="btn" id="payBtn">Отримати розбір</button>
+    <p class="err hide" id="payErr"></p>
+    <p class="foot" id="payNote">Оплата через creem.io. Розбір генерується одразу після оплати і зберігається за цим посиланням.</p>
+  </section>
+
   <section id="result" class="card hide">
-    <div class="loading" id="loading"><div class="spin"></div><span>Розбираю твій досвід — це може зайняти 1–2 хвилини. Не блокуй телефон і не перемикай вкладку.</span></div>
+    <div class="loading" id="loading"><div class="spin"></div><span id="loadingText">Розбираю твій досвід — це займе 1–2 хвилини. Можна згорнути: розбір збережеться за цим посиланням.</span></div>
     <div class="report" id="report"></div>
     <div id="after" class="hide">
       <div style="height:22px"></div>
       <button class="btn hide" id="retryBtn">Спробувати ще раз (ті самі відповіді)</button>
+      <div id="savedBox" class="hide">
+        <p>Розбір збережено — відкривається за посиланням з будь-якого пристрою.</p>
+        <button class="btn secondary" id="copyBtn">Скопіювати посилання</button>
+      </div>
       <div style="height:10px"></div>
       <button class="btn secondary" id="restartBtn">Пройти анкету заново</button>
       <p class="foot">Зарплати — медіани DOU, літо 2026. Розбір згенеровано ШІ на основі твоїх відповідей; це орієнтир, а не гарантія.</p>
@@ -167,7 +201,7 @@
 </form>
 
 <script type="module">
-import { QUESTIONS } from "./questions.js";
+import { QUESTIONS } from "/questions.js";
 
 const $ = id => document.getElementById(id);
 let cur = 0;
@@ -176,7 +210,7 @@ let answers = QUESTIONS.map(q => q.multi ? [] : null);
 const has = i => QUESTIONS[i].multi ? answers[i].length > 0 : answers[i] !== null;
 
 function show(id){
-  for (const s of ["landing","sphere","lead","quiz","result"]) $(s).classList.toggle("hide", s !== id);
+  for (const s of ["landing","sphere","lead","quiz","paywall","result"]) $(s).classList.toggle("hide", s !== id);
   window.scrollTo(0, 0);
 }
 
@@ -249,7 +283,9 @@ function draw(md){
 const FIRST_TEXT_MS = 240000; // 4 хв без жодного слова — модель зависла
 const STALL_MS = 30000;        // 30 с без жодного байта (навіть пульсу) — з'єднання мертве
 
-function fail(msg){
+let retryAction = null;
+function fail(msg, action){
+  retryAction = action || (() => { reconnects = 0; loadReport(reportId); });
   $("loading").classList.add("hide");
   const p = document.createElement("p");
   p.className = "err";
@@ -258,33 +294,75 @@ function fail(msg){
   $("retryBtn").classList.remove("hide");
 }
 
+// Відповіді → сервер зберігає їх і дає id → сторінка переходить на /r/<id> і тягне розбір.
 async function analyze(){
   show("result");
-  $("report").innerHTML = "";
-  $("loading").classList.remove("hide");
-  $("after").classList.add("hide");
-  $("retryBtn").classList.add("hide");
-  const ctrl = new AbortController();
-  let why = "";
-  const started = Date.now();
-  let lastByte = Date.now();
-  let text = "", complete = false, raf = 0;
-  const watchdog = setInterval(() => {
-    if (!text.trim() && Date.now() - started > FIRST_TEXT_MS){ why = "slow"; ctrl.abort(); }
-    else if (Date.now() - lastByte > STALL_MS){ why = "stall"; ctrl.abort(); }
-  }, 2000);
+  resetResult();
+  $("nextBtn").disabled = true;
   try {
     const res = await fetch("/api/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ answers }),
-      signal: ctrl.signal,
     });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || !j.id) throw new Error(j.error || "Щось пішло не так.");
+    remember(j.id);
+    history.pushState(null, "", "/r/" + j.id);
+    loadReport(j.id);
+  } catch (e) {
+    fail(/network|fetch|load failed/i.test(String(e?.message)) ? "Нема з'єднання. Спробуй ще раз." : e.message, analyze);
+    $("after").classList.remove("hide");
+  } finally {
+    $("nextBtn").disabled = false;
+  }
+}
+
+function resetResult(){
+  $("report").innerHTML = "";
+  $("loading").classList.remove("hide");
+  $("after").classList.add("hide");
+  $("retryBtn").classList.add("hide");
+  $("savedBox").classList.add("hide");
+}
+
+function remember(id){ try { localStorage.setItem("tebbor:last", id); } catch {} }
+function lastId(){ try { return localStorage.getItem("tebbor:last"); } catch { return null; } }
+
+let reportId = null, reconnects = 0;
+const MAX_RECONNECTS = 3;
+
+async function loadReport(id){
+  reportId = id;
+  show("result");
+  resetResult();
+  const ctrl = new AbortController();
+  let why = "";
+  const started = Date.now();
+  let lastByte = Date.now();
+  let text = "", complete = false, raf = 0, notFound = false;
+  const watchdog = setInterval(() => {
+    if (!text.trim() && Date.now() - started > FIRST_TEXT_MS){ why = "slow"; ctrl.abort(); }
+    else if (Date.now() - lastByte > STALL_MS){ why = "stall"; ctrl.abort(); }
+  }, 2000);
+  try {
+    const res = await fetch("/api/report?id=" + encodeURIComponent(id), { signal: ctrl.signal, cache: "no-store" });
+    if (res.status === 402){
+      const j = await res.json().catch(() => ({}));
+      clearInterval(watchdog);
+      showPaywall(id, j);
+      return;
+    }
     if (!res.ok || !res.body){
+      notFound = res.status === 404;
       let msg = "Щось пішло не так.";
       try { msg = (await res.json()).error || msg; } catch {}
       throw new Error(msg);
     }
+    try {
+      const a = JSON.parse(res.headers.get("X-Answers") || "null");
+      if (Array.isArray(a) && a.length === QUESTIONS.length) answers = a;
+    } catch {}
     const reader = res.body.getReader();
     const dec = new TextDecoder();
     for (;;){
@@ -299,22 +377,85 @@ async function analyze(){
     }
     cancelAnimationFrame(raf); raf = 0;
     draw(text);
-    if (!text.trim()) throw new Error("Порожня відповідь. Спробуй ще раз.");
-    if (!complete) fail("Розбір обірвався на півдорозі. Спробуй ще раз — відповіді збережені.");
+    if (complete){
+      reconnects = 0;
+      remember(id);
+      $("savedBox").classList.remove("hide");
+    } else if (!reconnectLater()) {
+      fail("Розбір обірвався на півдорозі. Спробуй ще раз — відповіді збережені.");
+    }
   } catch (e) {
     cancelAnimationFrame(raf);
     if (text.trim()) draw(text);
     const m = String(e && e.message || "");
-    fail(
-      why === "slow" ? "Модель зараз перевантажена й не відповідає. Спробуй ще раз за хвилину." :
-      why === "stall" || /network|fetch|load failed|terminated|abort/i.test(m)
-        ? "З'єднання обірвалось (часто — коли телефон заблокувався). Спробуй ще раз — відповіді збережені."
-        : (m || "Щось пішло не так.")
-    );
+    const network = why === "stall" || /network|fetch|load failed|terminated|abort/i.test(m);
+    if (notFound){
+      fail("Розбір за цим посиланням не знайдено.");
+      $("retryBtn").classList.add("hide");
+    } else if (!(network && reconnectLater())) {
+      fail(
+        why === "slow" ? "Модель зараз перевантажена й не відповідає. Спробуй ще раз за хвилину." :
+        network ? "З'єднання обірвалось. Спробуй ще раз — розбір дописується на сервері." :
+        (m || "Щось пішло не так.")
+      );
+    }
   } finally {
     clearInterval(watchdog);
   }
   $("after").classList.remove("hide");
+}
+
+// Пейвол. Повернулись з оплати, а creem ще «processing» → кілька разів перепитуємо.
+let payChecks = 0;
+function showPaywall(id, info){
+  show("paywall");
+  $("payErr").classList.add("hide");
+  const back = new URLSearchParams(location.search).has("checkout_id") || info.pending;
+  if (back && info.hasCheckout && payChecks < 8){
+    payChecks++;
+    $("payBtn").disabled = true;
+    $("payBtn").textContent = "Перевіряємо оплату…";
+    setTimeout(() => loadReport(id), 2500);
+    return;
+  }
+  $("payBtn").disabled = false;
+  $("payBtn").textContent = "Отримати розбір";
+  if (back && info.hasCheckout){
+    $("payErr").textContent = "Оплату поки не бачимо. Якщо гроші списались — онови сторінку за хвилину або напиши нам.";
+    $("payErr").classList.remove("hide");
+  }
+}
+$("payBtn").onclick = async () => {
+  $("payBtn").disabled = true;
+  $("payErr").classList.add("hide");
+  try {
+    const r = await fetch("/api/checkout", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: reportId }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (j.paid || r.status === 409){ loadReport(reportId); return; } // вже оплачено / пейвол вимкнено
+    if (!r.ok || !j.checkout_url) throw new Error(j.error || "Платіжка недоступна, спробуй за хвилину.");
+    location.href = j.checkout_url;
+  } catch (e) {
+    $("payErr").textContent = /fetch|network|load failed/i.test(String(e?.message)) ? "Нема з'єднання. Спробуй ще раз." : e.message;
+    $("payErr").classList.remove("hide");
+    $("payBtn").disabled = false;
+  }
+};
+
+// Обрив (часто — телефон заблокувався): сервер дописує розбір сам, тож тихо
+// перепідключаємось, щойно сторінка знову видима.
+function reconnectLater(){
+  if (reconnects >= MAX_RECONNECTS) return false;
+  reconnects++;
+  const id = reportId;
+  const go = () => setTimeout(() => { if (reportId === id) loadReport(id); }, 1500);
+  if (document.visibilityState === "visible") go();
+  else document.addEventListener("visibilitychange", function h(){
+    if (document.visibilityState === "visible"){ document.removeEventListener("visibilitychange", h); go(); }
+  });
+  return true;
 }
 
 // Сфера: дані → анкета; решта → збираємо контакт (вимірюємо попит на інші гілки)
@@ -365,12 +506,25 @@ $("sphereBack").onclick = () => show("landing");
 
 $("startBtn").onclick = () => { show("sphere"); renderSphere(); };
 $("nextBtn").onclick = next;
-$("retryBtn").onclick = analyze;
-$("backBtn").onclick = () => { if (cur > 0){ cur--; render(); } else { show("sphere"); renderSphere(); } };
-$("restartBtn").onclick = () => {
-  cur = 0; answers = QUESTIONS.map(q => q.multi ? [] : null);
-  show("landing");
+$("retryBtn").onclick = () => retryAction && retryAction();
+$("copyBtn").onclick = async () => {
+  const url = location.origin + "/r/" + reportId;
+  try { await navigator.clipboard.writeText(url); $("copyBtn").textContent = "Скопійовано ✓"; }
+  catch { prompt("Скопіюй посилання:", url); }
 };
+$("backBtn").onclick = () => { if (cur > 0){ cur--; render(); } else { show("sphere"); renderSphere(); } };
+$("restartBtn").onclick = () => { location.href = "/"; };
+
+// Старт: /r/<id> → одразу розбір; інакше лендинг (+ посилання на останній розбір)
+const m = location.pathname.match(/^\/r\/([0-9a-f-]{36})\/?$/);
+if (m) loadReport(m[1]);
+else {
+  const last = lastId();
+  if (last && /^[0-9a-f-]{36}$/.test(last)){
+    $("lastLink").href = "/r/" + last;
+    $("lastWrap").classList.remove("hide");
+  }
+}
 </script>
 </body>
 </html>

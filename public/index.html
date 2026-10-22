@@ -26,7 +26,7 @@
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     line-height:1.55; -webkit-font-smoothing:antialiased;
   }
-  .wrap{max-width:640px; margin:0 auto; padding:24px 16px 110px} /* знизу місце під плашку Netlify */
+  .wrap{max-width:640px; margin:0 auto; padding:24px 16px 0}
   .card{background:var(--card); border:1px solid var(--line); border-radius:18px; padding:28px 22px; box-shadow:var(--shadow)}
   h1{font-size:1.75rem; line-height:1.2; margin:.2em 0 .5em; letter-spacing:-.02em}
   p{color:var(--muted); margin:.4em 0}
@@ -86,6 +86,8 @@
   .field:focus{outline:none; border-color:var(--accent)}
   .ok{color:var(--brand); font-weight:600}
   .foot{font-size:.78rem; color:var(--muted); text-align:center; margin-top:22px}
+  .foot a, .legal a{color:var(--muted)}
+  .legal{max-width:640px; margin:18px auto 0; padding:0 16px 110px; /* знизу місце під плашку Netlify */ text-align:center; font-size:.78rem; color:var(--muted)}
   /* пейвол: розмита структура без вигаданого тексту */
   .skel{border:1px solid var(--line); border-radius:14px; padding:16px; margin:4px 0 20px; filter:blur(2.5px); user-select:none; pointer-events:none}
   .skel h4{margin:.9em 0 .45em; font-size:.95rem; color:var(--ink)}
@@ -121,7 +123,7 @@
       <p>…ще 9 ролей, вилки й один крок</p>
     </div>
     <button class="btn" id="startBtn">Почати — ~2 хвилини</button>
-    <p class="foot">Тільки тапи, без реєстрації. Розбір — ≈ 225 грн ($4.99), разово, без підписки.</p>
+    <p class="foot">Тільки тапи, без реєстрації. Розбір — ≈ 99 грн ($2.19), разово, без підписки.</p>
     <p class="foot hide" id="lastWrap"><a id="lastLink" href="#">Відкрити мій останній розбір</a></p>
   </section>
 
@@ -172,10 +174,10 @@
       <h4>4–10. Ще 7 ролей</h4><i style="width:70%"></i><i style="width:74%"></i>
       <h4>Твій крок</h4><i style="width:90%"></i><i style="width:55%"></i>
     </div>
-    <div class="price"><b>≈ 225 грн</b><span>оплата $4.99 · разово, без підписки</span></div>
+    <div class="price"><b>≈ 99 грн</b><span>оплата $2.19 · разово, без підписки</span></div>
     <button class="btn" id="payBtn">Отримати розбір</button>
     <p class="err hide" id="payErr"></p>
-    <p class="foot" id="payNote">Оплата через creem.io. Розбір генерується одразу після оплати і зберігається за цим посиланням.</p>
+    <p class="foot" id="payNote">Оплата через creem.io. Розбір генерується одразу після оплати і зберігається за цим посиланням. Оплачуючи, ти погоджуєшся з <a href="/terms">умовами</a> і <a href="/refund">політикою повернень</a>.</p>
   </section>
 
   <section id="result" class="card hide">
@@ -195,6 +197,10 @@
   </section>
 
 </div>
+
+<footer class="legal">
+  <a href="/terms">Умови</a> · <a href="/privacy">Конфіденційність</a> · <a href="/refund">Повернення</a> · <a href="mailto:tebbor.help@gmail.com">tebbor.help@gmail.com</a>
+</footer>
 
 <form name="lead" data-netlify="true" netlify-honeypot="bot-field" hidden>
   <input name="sphere"><input name="contact"><input name="bot-field">

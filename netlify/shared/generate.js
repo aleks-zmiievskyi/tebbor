@@ -29,7 +29,7 @@ export async function generate({ store, id, claim, onText = () => {} }) {
     headers: {
       Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": "https://tebbor.netlify.app",
+      "HTTP-Referer": "https://tebbor.com",
       "X-Title": "tebbor",
     },
     body: JSON.stringify({
